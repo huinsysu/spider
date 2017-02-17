@@ -3,24 +3,73 @@ import urllib
 import urllib2
 import re
 
-page = 1
-url = 'http://www.qiushibaike.com/8hr/page/' + str(page) + '?s=4957699'
-user_agent = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:51.0) Gecko/20100101 Firefox/51.0'
-headers = { 'User-Agent' : user_agent }
-try:
-    request = urllib2.Request(url, headers = headers)
-    response = urllib2.urlopen(request)
-    content = response.read().decode('utf-8')
-    pattern = re.compile('<div class="author clearfix">.*?<h2>(.*?)</h2>.*?<div class="content">(.*?)</div>(.*?)<span class="stats-vote.*?class="number">(.*?)</i>', re.S)
-    items = re.findall(pattern, content)
-    for item in items:
-        haveImg = re.search("img", item[2])
-        if not haveImg:
-            print item[0], item[1], item[3]
-except urllib2.URLError, e:
-    if hasattr(e, "code"):
-       print e.code
-    if hasattr(e, "reason"):
-       print e.reason
+#糗事百科爬虫类
+class QSBK:
 
+    def __init__(self):
+        self.pageIndex = 1
+        self.user_agent = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:51.0) Gecko/20100101 Firefox/51.0'
+        self.headers = { 'User-Agent' : self.user_agent }
+        self.stories = []
+        self.enable = False
+
+    def getPage(self, pageIndex):
+        try:
+            url = 'http://www.qiushibaike.com/8hr/page/' + str(pageIndex) + '?s=4957699'
+            request = urllib2.Request(url, headers = self.headers)
+            response = urllib2.urlopen(request)
+            pageCode = response.read().decode('utf-8')
+            return pageCode
+        except urllib2.URLError, e:
+            if hasattr(e, "reason"):
+                print u"连接糗事百科失败，错误原因：", e.reason
+                return None
+
+    def getPageItems(self, pageIndex):
+        pageCode = self.getPage(pageIndex)
+        if not pageCode:
+            print u"页面加载失败..."
+            return None
+        pattern = re.compile('<div class="author clearfix">.*?<h2>(.*?)</h2>.*?<div class="content">.*?<span>(.*?)</span>.*?</div>(.*?)<span class="stats-vote.*?class="number">(.*?)</i>', re.S)
+        items = re.findall(pattern, pageCode)
+        pageStories = []
+        for item in items:
+            haveImg = re.search("img", item[2])
+            if not haveImg:
+                replaceBR = re.compile('<br/>')
+                text = re.sub(replaceBR, "\n", item[1])
+                pageStories.append([item[0].strip(), text.strip(), item[3].strip()])
+        return pageStories
+
+    def loadPage(self):
+        if self.enable == True:
+            if len(self.stories) < 2:
+                pageStories = self.getPageItems(self.pageIndex)
+                if pageStories:
+                    self.stories.append(pageStories)
+                    self.pageIndex += 1
+
+    def getOneStory(self, pageStories, page):
+        for story in pageStories:
+            input = raw_input()
+            self.loadPage()
+            if input == "Q":
+                self.enable = False
+                return
+            print u"第%d页\t发布人：%s\t赞：%s\n%s" %(page, story[0], story[2], story[1])
+
+    def start(self):
+        print u"正在读取糗事百科，按回车查看新段子，Q退出。"
+        self.enable = True
+        self.loadPage()
+        nowPage = 0
+        while self.enable:
+            if len(self.stories) > 0:
+                pageStories = self.stories[0]
+                nowPage += 1
+                del self.stories[0]
+                self.getOneStory(pageStories, nowPage)
+
+spider = QSBK()
+spider.start()
 
